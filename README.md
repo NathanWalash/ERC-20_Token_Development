@@ -1,116 +1,232 @@
-# ERC-20_Token_Development
+# DAO GBP Stablecoin Development Project
 
-# DAO System with GoCardless Integration
-
-This system enables users to join DAOs, make fiat-based recurring contributions through GoCardless, and participate in claims and voting within a smart contract system using a shared ERC-20 stablecoin (`DAOUSD`).
+A development and testing environment for a DAO GBP stablecoin (DAOGBP) with controlled minting and burning capabilities. This project serves as the foundation for a larger DAO treasury management system that will integrate traditional fiat payments with blockchain operations.
 
 ## Overview
 
-The architecture integrates the Ethereum blockchain with GoCardless for fiat payments. DAO members contribute funds at intervals determined by each DAO. Contributions in fiat are converted into DAOUSD tokens, which represent value on-chain and are used for all treasury operations, including insurance-like claims and payouts.
+This project implements a basic ERC-20 stablecoin (DAOGBP) designed to be pegged to British Pounds (1 DAOGBP = 1 GBP). The current implementation focuses on core token functionality with controlled minting and burning operations, providing the foundation for future integration with fiat payment systems and DAO governance.
 
-## Key Components
+## Architecture
 
-- **DAOUSD**: A stable ERC-20 token pegged to fiat currency (e.g., 1 DAOUSD = 1 USD). Minted and burned by the backend upon confirmed GoCardless transactions.
-- **DAO Smart Contract**: Manages groups, membership, contribution tracking, voting, and claim payouts.
-- **GoCardless Integration**: Facilitates recurring bank debits from members to a central treasury wallet managed by the DAO's backend.
-- **Backend Service**: Handles webhook processing, DAOUSD minting, user verification, and synchronizing on-chain actions with off-chain fiat payments.
+The system consists of three core components:
 
----
+1. **DAOGBP Stablecoin** - An ERC-20 token pegged to British Pounds (1 DAOGBP = 1 GBP)
+2. **Bridge Backend Service** - RESTful API for testing mint/burn operations
+3. **Smart Contracts** - On-chain logic for token management with owner-controlled operations
 
-## Flow: Fiat Contributions via GoCardless
+## Key Features
 
-### 1. DAO Creation
+### Token Management
+- **Controlled Minting**: Only the contract owner can mint new DAOGBP tokens
+- **Secure Burning**: Only the contract owner can burn tokens from any address
+- **Transparent Ledger**: All operations recorded on blockchain for auditability
+- **British Pound Peg**: Designed to maintain 1:1 ratio with GBP
 
-- A user deploys or creates a new DAO group using the `createGroup` function.
-- The group defines:
-  - Contribution amount (e.g., $20)
-  - Contribution interval (e.g., monthly)
-  - Target treasury size
-  - Quorum rules for voting (default: 51%)
+### Development Environment
+- **Hardhat Framework**: Complete development, testing, and deployment setup
+- **OpenZeppelin Contracts**: Industry-standard ERC-20 implementation
+- **Testing Infrastructure**: Ready for comprehensive token testing
 
-### 2. User Onboarding
+## Critical Operations: Mint and Burn
 
-- User visits frontend, connects wallet, and joins a DAO group.
-- The frontend prompts user to set up a GoCardless direct debit mandate.
-- Backend registers the user with GoCardless and creates a subscription that matches DAO contribution rules.
+### `/mint` Endpoint
 
-### 3. Contribution Handling
+**Purpose**: Creates new DAOGBP tokens and assigns them to a specified address
 
-- On each billing cycle:
-  - GoCardless charges the user’s bank account.
-  - The backend receives a webhook confirming successful payment.
-  - Backend mints an equivalent amount of DAOUSD to the user’s wallet.
-  - Backend optionally logs the contribution on-chain via `contributeWithToken`.
+**Process**:
+1. Backend validates minting request
+2. Backend calls `/mint` with recipient address and amount
+3. Smart contract mints equivalent DAOGBP tokens to recipient's wallet
+4. Transaction hash returned for confirmation
 
-### 4. Treasury Management
+**Security**: Only the authorized backend wallet (contract owner) can mint tokens
 
-- DAO contract tracks total pot value in DAOUSD.
-- Users can view contribution history, pot status, and funding goals on the frontend.
-- The smart contract enforces rules for negative pots and premium charges if needed.
+### `/burn` Endpoint
 
----
+**Purpose**: Destroys DAOGBP tokens from a specified address
 
-## Flow: Claims and Voting
+**Process**:
+1. Backend validates burning request
+2. Backend calls `/burn` with address and amount to burn
+3. Smart contract burns tokens from specified address
+4. Transaction hash returned for confirmation
 
-### 1. Claim Submission
+**Security**: Only the authorized backend wallet (contract owner) can burn tokens
 
-- Any DAO member can submit a claim using the `createClaim` function.
-- The claim specifies the amount requested and is logged on-chain.
+## Technical Implementation
 
-### 2. Voting Process
+### Smart Contract (DAO.sol)
+```solidity
+contract DAO is ERC20, Ownable {
+    constructor(address initialOwner) ERC20("DAO Pound Token", "DAOGBP") Ownable(initialOwner) {}
+    
+    function mint(address to, uint256 amount) external onlyOwner {
+        _mint(to, amount);
+    }
 
-- Members vote on the claim using `voteOnClaim`, selecting `Upvote` or `Downvote`.
-- Each user may vote once per claim.
-- The claim remains open until a quorum is reached.
+    function burn(address from, uint256 amount) external onlyOwner {
+        _burn(from, amount);
+    }
+}
+```
 
-### 3. Quorum Calculation
+### Bridge Backend API
+- **Framework**: Node.js with Express
+- **Blockchain Integration**: Ethers.js for Ethereum interaction
+- **Security**: Environment-based private key management
+- **CORS**: Enabled for frontend integration
 
-- A claim is eligible for finalization if:
-  - At least 51% of confirmed group members have voted
-  - More upvotes than downvotes have been recorded
+## Environment Configuration
 
-### 4. Finalization and Payout
+Create a `.env` file in the bridge-backend directory:
 
-- Admin or custodian calls `finalizeClaim`.
-- If approved:
-  - The claim is marked approved and processed.
-  - The specified DAOUSD amount is transferred to the claimer’s wallet.
-- If rejected:
-  - The claim is marked processed but no payout is made.
+```env
+RPC_URL=your_ethereum_rpc_url
+PRIVATE_KEY=your_backend_wallet_private_key
+TOKEN_ADDRESS=deployed_daogbp_token_address
+PORT=3000
+```
 
----
+## API Endpoints
 
-## Flow: Fiat Redemption (Optional)
+### POST /mint
+Creates new DAOGBP tokens
 
-If fiat redemption is enabled:
+**Request Body**:
+```json
+{
+  "to": "0xUserWalletAddress",
+  "amount": "100"
+}
+```
 
-- The user initiates a redemption request via the frontend.
-- Backend burns the requested DAOUSD from the user’s wallet.
-- Backend initiates a payout through GoCardless or via bank transfer from the treasury account.
-- Confirmation is logged for auditability.
+**Response**:
+```json
+{
+  "status": "success",
+  "txHash": "0x..."
+}
+```
 
----
+### POST /burn
+Destroys DAOGBP tokens
 
-## Security and Compliance Notes
+**Request Body**:
+```json
+{
+  "from": "0xUserWalletAddress", 
+  "amount": "50"
+}
+```
 
-- Only the backend may mint or burn DAOUSD, guarded by admin role.
-- Users must approve DAO smart contract before tokens can be transferred for contributions.
-- Fiat custody is centralized and must comply with local financial regulations and KYC/AML requirements.
+**Response**:
+```json
+{
+  "status": "success",
+  "txHash": "0x..."
+}
+```
 
----
+## Development Setup
 
-## Technologies
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Hardhat development environment
 
-- Solidity (DAO and DAOUSD contracts)
-- GoCardless API
-- Node.js/Express or similar backend
-- Web3.js or Ethers.js frontend integration
-- PostgreSQL or MongoDB for tracking mandates and payments
+### Installation
+```bash
+# Install dependencies
+npm install
 
----
+# Install bridge backend dependencies
+cd bridge-backend
+npm install
+```
 
-## Future Improvements
+### Smart Contract Deployment
+```bash
+# Compile contracts
+npx hardhat compile
 
-- Add multi-currency fiat support (GBP, EUR)
-- Automatic DAO pot rebalancing based on claim history
-- DAO-controlled mint/burn rights via governance
+# Deploy to local network
+npx hardhat node
+npx hardhat run scripts/deploy.js --network localhost
+
+# Deploy to testnet
+npx hardhat run scripts/deploy.js --network <testnet>
+```
+
+### Bridge Backend
+```bash
+cd bridge-backend
+npm start
+```
+
+## Testing
+
+### Contract Testing
+```bash
+npx hardhat test
+```
+
+### API Testing
+Use tools like Postman or curl to test the mint/burn endpoints:
+
+```bash
+# Test minting
+curl -X POST http://localhost:3000/mint \
+  -H "Content-Type: application/json" \
+  -d '{"to": "0x...", "amount": "100"}'
+
+# Test burning
+curl -X POST http://localhost:3000/burn \
+  -H "Content-Type: application/json" \
+  -d '{"from": "0x...", "amount": "50"}'
+```
+
+## Security Considerations
+
+### Access Control
+- Mint/burn operations restricted to contract owner
+- Private keys stored securely in environment variables
+- CORS configured for development/testing
+
+### Transaction Safety
+- All operations require blockchain confirmation
+- Transaction hashes returned for audit trail
+- Error handling for failed transactions
+
+## Future Development
+
+This project serves as the foundation for a larger DAO treasury management system. Planned integrations include:
+
+- **Fiat Payment Integration**: Connection to traditional banking systems
+- **DAO Governance**: Voting and proposal mechanisms
+- **Treasury Management**: Automated contribution and claim processing
+- **Regulatory Compliance**: KYC/AML and financial regulation support
+- **Multi-currency Support**: Expansion beyond GBP to other currencies
+
+## Project Structure
+
+```
+├── contracts/
+│   └── DAO.sol              # Main DAOGBP token contract
+├── bridge-backend/
+│   ├── index.js             # API server for mint/burn operations
+│   ├── DAO_abi.json         # Contract ABI
+│   └── package.json         # Backend dependencies
+├── scripts/
+│   └── deploy.js            # Contract deployment script
+├── test/
+│   └── Lock.js              # Test files
+└── hardhat.config.js        # Hardhat configuration
+```
+
+## Benefits
+
+- **Development Foundation**: Solid base for building complex DAO systems
+- **British Focus**: Designed specifically for GBP integration
+- **Security**: Controlled token operations with owner-only access
+- **Transparency**: All operations recorded on blockchain
+- **Scalability**: Ready for integration with larger systems
